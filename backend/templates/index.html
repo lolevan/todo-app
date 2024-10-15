@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>To-Do приложение</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .task {
+            border-bottom: 1px solid #ccc;
+            padding: 15px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-center mb-4">To-Do список</h1>
+
+    <div id="login-form" class="card p-4 shadow-sm mb-4">
+        <h2 class="h4 mb-3">Войти</h2>
+        <input type="text" id="username" class="form-control mb-2" placeholder="Имя пользователя">
+        <input type="password" id="password" class="form-control mb-3" placeholder="Пароль">
+        <button class="btn btn-primary w-100" onclick="login()">Войти</button>
+    </div>
+
+    <div id="app" style="display:none;">
+        <div class="card p-4 shadow-sm mb-4">
+            <h2 class="h4 mb-3">Добавить новую задачу</h2>
+            <input type="text" id="title" class="form-control mb-2" placeholder="Название">
+            <textarea id="description" class="form-control mb-3" placeholder="Описание"></textarea>
+            <button class="btn btn-success w-100" onclick="addTask()">Добавить</button>
+        </div>
+
+        <div class="card p-4 shadow-sm">
+            <h2 class="h4 mb-3">Список задач</h2>
+            <div id="tasks"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно подтверждения удаления -->
+<div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="confirmDeleteLabel">Подтверждение удаления</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Вы уверены, что хотите удалить эту задачу?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteButton">Удалить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Модальное окно для редактирования задачи -->
+<div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editTaskLabel">Редактировать задачу</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="editTitle" class="form-control mb-2" placeholder="Название">
+        <textarea id="editDescription" class="form-control mb-3" placeholder="Описание"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+        <button type="button" class="btn btn-success" id="confirmEditButton">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS и Popper.js -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    let token = '';
+    let taskIdToEdit = null;
+
+    function login() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        fetch('/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username, password})
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.access_token) {
+                token = data.access_token;
+                document.getElementById('login-form').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                getTasks();
+            } else {
+                alert('Неверные учетные данные');
+            }
+        });
+    }
+
+    function getTasks() {
+        fetch('/tasks', {
+            headers: {'Authorization': 'Bearer ' + token}
+        })
+        .then(res => res.json())
+        .then(data => {
+            const tasksDiv = document.getElementById('tasks');
+            tasksDiv.innerHTML = '';
+            data.forEach(task => {
+                const taskDiv = document.createElement('div');
+                taskDiv.className = 'task';
+                taskDiv.innerHTML = `
+                    <h5>${task.title}</h5>
+                    <p>${task.description || ''}</p>
+                    <button class="btn btn-warning btn-sm" onclick="showEditTask(${task.id}, '${task.title}', '${task.description || ''}')">Редактировать</button>
+                    <button class="btn btn-danger btn-sm" onclick="confirmDelete(${task.id})">Удалить</button>
+                `;
+                tasksDiv.appendChild(taskDiv);
+            });
+        });
+    }
+
+    function addTask() {
+        const title = document.getElementById('title').value;
+        const description = document.getElementById('description').value;
+
+        fetch('/tasks', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({title, description})
+        })
+        .then(res => res.json())
+        .then(() => {
+            document.getElementById('title').value = '';
+            document.getElementById('description').value = '';
+            getTasks();
+        });
+    }
+
+    function showEditTask(id, title, description) {
+        taskIdToEdit = id;
+        document.getElementById('editTitle').value = title;
+        document.getElementById('editDescription').value = description;
+
+        const editModal = new bootstrap.Modal(document.getElementById('editTaskModal'));
+        editModal.show();
+    }
+
+    document.getElementById('confirmEditButton').addEventListener('click', () => {
+        const newTitle = document.getElementById('editTitle').value;
+        const newDescription = document.getElementById('editDescription').value;
+        updateTask(taskIdToEdit, newTitle, newDescription);
+
+        const editModal = bootstrap.Modal.getInstance(document.getElementById('editTaskModal'));
+        editModal.hide();
+    });
+
+    function updateTask(id, title, description) {
+        fetch('/tasks/' + id, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token},
+            body: JSON.stringify({title, description})
+        })
+        .then(res => res.json())
+        .then(() => {
+            getTasks();
+        });
+    }
+
+    function confirmDelete(id) {
+        taskIdToDelete = id;
+        const deleteModal = new bootstrap.Modal(document.getElementById('confirmDeleteModal'));
+        deleteModal.show();
+    }
+
+    document.getElementById('confirmDeleteButton').addEventListener('click', () => {
+        deleteTask(taskIdToDelete);
+        const deleteModal = bootstrap.Modal.getInstance(document.getElementById('confirmDeleteModal'));
+        deleteModal.hide();
+    });
+
+    function deleteTask(id) {
+        fetch('/tasks/' + id, {
+            method: 'DELETE',
+            headers: {'Authorization': 'Bearer ' + token}
+        })
+        .then(res => res.json())
+        .then(() => {
+            getTasks();
+        });
+    }
+</script>
+
+</body>
+</html>
